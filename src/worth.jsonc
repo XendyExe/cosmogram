@@ -1,0 +1,89 @@
+{
+    // Starter items
+    "216": 0,  // starter helm
+    "222": 0,  // starter hatch
+    "117": 0,  // starter wrench
+    "231": 0,  // starter thruster
+    "118": 0,  // starter shredder
+    "227": 0,  // starter rc
+    "247": 0,  // starter fab
+    "261": 0,  // starter nav
+
+    // Worthless/useless items
+    "162": 0,  // Booster
+    "163": 0,  // Booster
+    "164": 0,  // Booster
+    "165": 0,  // Booster
+    "258": 0,  // Enhanced Turret Controllers
+
+    // Test only items
+    "259": 0,  // bulk
+    "260": 0,  // bulk
+    "119": 0,  // hand cannon
+    "254": 0,  // animator
+    "121": 0,  // Sandbox RCD
+    "52":  0,  // Golden Volleyball
+    "54":  0,  // Golden Basketball
+    "161": 0,  // Void Orb
+
+    // Deprecated
+    "3": 0, // Silica
+    "255": 0, // Normal turrets
+
+    // Eternal Wrenches (untradable, or heavily discouraged)
+    "300": 0,  // Eternal bronze
+    "301": 0,  // Eternal silver
+    "302": 0,  // Eternal gold
+    "304": 0,  // Eternal Platinum
+    "303": 0,  // Eternal flux
+
+    // Resources
+    "1": 0.0416666667,  // Iron (1:24)
+    "2": 0.03125,  // Explosives (1:32)
+    "4": 2,  // Hyper rubber (2:1)
+    "5": 1,  // Flux Crystals (1:1)
+    "234": 0.125, // Ice block (1:8)
+    "123": 0.0833333333, // Shield Core (1:12)
+
+    // Other Resources
+    "226": 2, // Cannon (2:1)
+    "228": 1, // Burst Cannon (1:1)
+    "229": 24, // Machine Cannon (24:1)
+    "263": 3, // Acute Cannon (3:1)
+    "265": 1, // Obtuse cannon (1:1)
+    "264": 1, // Munitions supply unit
+    "257": 12, // Shield Projector
+    "256": 3, // Shield Generator
+
+    // Balls
+    "51": 16, // Vollyball
+    "53": 16, // Basketball
+    "55": 16, // Beachball
+    "56": 16, // football
+
+    // Gremlins
+    "323": 256, // Red Gremlin
+    "324": 256, // Orange Gremlin
+    "325": 256, // Yellow Gremlin
+    "340": 256, // Green Gremlin
+    "341": 256, // Blue Gremlin
+    "342": 256, // Purple Gremlin
+
+    // Misc
+    "108": 4, // Backpack
+    "115": 32, // manifest scanner
+    "116": 32, // bom scanner
+    "120": 8, // blueprint scanner
+    "122": 64, // Flux rcd
+    "326": 16, // Elimination Lootbox
+
+    // Rares
+    "102": 100000, // Golden Item Shredder
+    "246": 70000, // Legacy
+    "305": 1400000, // Gold Null Trophy
+    "307": 420000, // Silver Null Trophy
+    "306": 250000, // Bug Hunter Trophy
+
+    // Four digit:
+    "65535": 50000
+}
