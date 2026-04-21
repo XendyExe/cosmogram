@@ -1,21 +1,21 @@
-use std::option::Option;
+use crate::fetcher::{fetch, get_item_data};
+use crate::jsontypes::ItemSchema;
+use crate::resulttypes::{ShipRecord, TransferCountItemsResult, TransferOverviewResult};
+use crate::types::{MemoryShipEntry, PackedShipEntry, PackedTransferLog, ShipNameEntry, TransferLog, TransferSource};
+use crate::utils::{is_hash_4_digit, normalize_name, pack_ship_hex, packed_hex_to_string, packed_ship_hex_to_hash};
 use chrono::Datelike;
+use chrono::{Duration, NaiveDate, Utc};
+use dashmap::DashMap;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use nohash_hasher::{IntMap, IntSet};
+use num_enum::TryFromPrimitive;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
-use std::{fs, time};
 use std::collections::{HashMap, HashSet};
+use std::option::Option;
 use std::path::{absolute, Path};
 use std::sync::Arc;
 use std::time::Instant;
-use chrono::{Duration, NaiveDate, Utc};
-use nohash_hasher::{IntMap, IntSet};
-use crate::fetcher::{fetch, get_item_data};
-use crate::jsontypes::{ItemSchema, JsonSummaryLog};
-use crate::types::{MemoryShipEntry, PackedShipEntry, PackedTransferLog, ShipNameEntry, TransferLog, TransferSource};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use num_enum::TryFromPrimitive;
-use crate::resulttypes::{ShipRecord, TransferOverviewResult};
-use crate::utils::{is_hash_4_digit, pack_ship_hex, packed_hex_to_string, packed_ship_hex_to_hash};
-use dashmap::DashMap;
+use std::{fs, time};
 
 pub mod types;
 mod jsontypes;
@@ -27,6 +27,7 @@ mod resulttypes;
 #[cfg(feature = "python")]
 pub mod pylib;
 
+// What items are rares?
 pub const RARES: [u16; 5] = [102, 246, 305, 307, 306];
 
 /// This is the definition of "just throw more ram" at it until it works
@@ -74,7 +75,7 @@ impl Cosmogram {
         let display_path = absolute(path).unwrap().display().to_string();
         main_progress_bar.set_style(
             ProgressStyle::default_bar()
-                .template(&format!("[Cosmogram] Loading transfer logs to {}\n{}", display_path, "[Cosmogram] [{bar:50}] {pos}/{len} (ETA: {eta})"))
+                .template(&format!("[Cosmogram] Loading econ logs to {}\n{}", display_path, "[Cosmogram] [{bar:50}] {pos}/{len} (ETA: {eta})"))
                 .unwrap(),
         );
         let worker_bars: Vec<_> = (0..rayon::current_num_threads())
@@ -117,6 +118,7 @@ impl Cosmogram {
                         new_names.push((*ship.0, ShipNameEntry {
                             index: *offset as usize,
                             name: ship.1.name.clone(),
+                            normalized_name: normalize_name(&ship.1.name),
                             color: ship.1.color,
                         }));
                     }
@@ -217,6 +219,51 @@ impl Cosmogram {
 
     }
 
+    pub fn get_ship_worth(&self, hex: &str) -> (f64, f64) {
+        let (hex_u32, lz) = pack_ship_hex(hex);
+        let is_four_digit = is_hash_4_digit(packed_ship_hex_to_hash(hex_u32, lz));
+        let Some(latest) = self.find_latest_ship(hex_u32, lz) else { return (0.0, 0.0) };
+        self.get_both_networth(&latest.items, is_four_digit)
+    }
+
+    pub fn get_rares_leaderboard(&self, search: Option<&str>, strict_search: bool) -> Vec<((u64, f64), u32)> {
+        if let Some(mut search) = search {
+            search = search.trim();
+            let normalized_search = normalize_name(search);
+            let mut indexes = HashSet::new();
+            for i in 0..self.leaderboard_flux_rares.len() {
+                let entry = &self.leaderboard_flux_rares[i];
+                if let Some(ship_name) = self.get_latest_ship_name_entry_from_hash(entry.0) {
+                    if ship_name.name.contains(search) { indexes.insert(i); }
+                    if strict_search { continue; }
+                    if ship_name.normalized_name.contains(&normalized_search) { indexes.insert(i); }
+                }
+            }
+            let mut result = indexes.iter().collect::<Vec<&usize>>();
+            result.sort_unstable_by_key(|i| **i);
+            result.iter().map(|i| (self.leaderboard_flux_rares[**i], **i as u32)).collect()
+        } else { self.leaderboard_flux_rares.clone().into_iter().zip(0..self.leaderboard_flux_rares.len() as u32).collect() }
+    }
+
+    pub fn get_no_rares_leaderboard(&self, search: Option<&str>, strict_search: bool) -> Vec<((u64, f64), u32)> {
+        if let Some(mut search) = search {
+            search = search.trim();
+            let normalized_search = normalize_name(search);
+            let mut indexes = HashSet::new();
+            for i in 0..self.leaderboard_flux_no_rares.len() {
+                let entry = &self.leaderboard_flux_no_rares[i];
+                if let Some(ship_name) = self.get_latest_ship_name_entry_from_hash(entry.0) {
+                    if ship_name.name.contains(search) { indexes.insert(i); }
+                    if strict_search { continue; }
+                    if ship_name.normalized_name.contains(&normalized_search) { indexes.insert(i); }
+                }
+            }
+            let mut result = indexes.iter().collect::<Vec<&usize>>();
+            result.sort_unstable_by_key(|i| **i);
+            result.iter().map(|i| (self.leaderboard_flux_no_rares[**i], **i as u32)).collect()
+        } else { self.leaderboard_flux_no_rares.clone().into_iter().zip(0..self.leaderboard_flux_no_rares.len() as u32).collect() }
+    }
+
     pub fn get_ship_data(&self, hex: &str, include_rares: bool) -> (HashSet<ShipRecord>, Vec<(u32, f64)>, usize, usize) {
         let (hex_u32, lz) = pack_ship_hex(hex);
         let hash = packed_ship_hex_to_hash(hex_u32, lz);
@@ -241,6 +288,98 @@ impl Cosmogram {
             worth += item_worth * *count as f64;
         }
         worth
+    }
+
+    pub fn get_both_networth(&self, items: &Vec<(u16, u32)>, four_digit: bool) -> (f64, f64) {
+        let mut worth = 0.0;
+        let mut worth_rares = if four_digit {self.item_worth[&65535]} else {0.0};
+        for (item_id, count) in items {
+            if RARES.contains(&(*item_id)) {
+                worth_rares += *count as f64;
+                continue;
+            }
+            worth += *count as f64;
+            worth_rares += *count as f64;
+        }
+        (worth, worth_rares)
+    }
+
+    pub fn get_transfer_item_count_by_src_hex(&self, hex: &str, item: u16, start_time: Option<u32>, end_time: Option<u32>) -> TransferCountItemsResult {
+        let (src, lz) = pack_ship_hex(hex);
+        let start_time = if start_time.is_some() { start_time.unwrap() } else { 0 };
+        let end_time = if end_time.is_some() { end_time.unwrap() } else { u32::MAX };
+        let timer = Instant::now();
+        let result: Vec<TransferLog> = self.get_transfers_by_src(src, lz, start_time, end_time).iter().filter(|log| log.item == item).cloned().collect();
+        let search_time = timer.elapsed().as_secs_f64();
+        let timer = Instant::now();
+        let save_file = self.create_table(&result);
+        let table_time = timer.elapsed().as_secs_f64();
+        let timer = Instant::now();
+        let mut counts: IntMap<u64, u32> = IntMap::with_capacity_and_hasher(0, Default::default());
+        let mut total_count: u32 = 0;
+        for log in &result {
+            let count = log.count as u32;
+            total_count += count;
+            if counts.contains_key(&log.dst_hash) {
+                counts.insert(log.dst_hash, counts[&log.dst_hash] + count);
+            } else {
+                counts.insert(log.dst_hash, count);
+            }
+        }
+        let mut entries: Vec<(u64, u32)> = counts.iter().map(|(&k, &v)| (k, v)).collect();
+        entries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let top: Vec<(String, u32)> = entries.into_iter().take(10).map(|a| (self.get_latest_name((a.0 & 0xFFFFFFFF) as u32, (a.0 >> 32) as u8).unwrap(), a.1)).collect();
+        let top_time = timer.elapsed().as_secs_f64();
+        TransferCountItemsResult {
+            src: true,
+            count: total_count,
+            table: save_file,
+            top,
+            search_time,
+            table_time,
+            top_time,
+            result_logs: result.len() as u64,
+            total_logs: self.total_log_count(),
+        }
+    }
+
+    pub fn get_transfer_item_count_by_dst_hex(&self, hex: &str, item: u16, start_time: Option<u32>, end_time: Option<u32>) -> TransferCountItemsResult {
+        let (src, lz) = pack_ship_hex(hex);
+        let start_time = if start_time.is_some() { start_time.unwrap() } else { 0 };
+        let end_time = if end_time.is_some() { end_time.unwrap() } else { u32::MAX };
+        let timer = Instant::now();
+        let result: Vec<TransferLog> = self.get_transfers_by_dst(src, lz, start_time, end_time).iter().filter(|log| log.item == item).cloned().collect();
+        let search_time = timer.elapsed().as_secs_f64();
+        let timer = Instant::now();
+        let save_file = self.create_table(&result);
+        let table_time = timer.elapsed().as_secs_f64();
+        let timer = Instant::now();
+        let mut counts: IntMap<u64, u32> = IntMap::with_capacity_and_hasher(0, Default::default());
+        let mut total_count: u32 = 0;
+        for log in &result {
+            let count = log.count as u32;
+            total_count += count;
+            if counts.contains_key(&log.src_hash) {
+                counts.insert(log.src_hash, counts[&log.src_hash] + count);
+            } else {
+                counts.insert(log.src_hash, count);
+            }
+        }
+        let mut entries: Vec<(u64, u32)> = counts.iter().map(|(&k, &v)| (k, v)).collect();
+        entries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let top: Vec<(String, u32)> = entries.into_iter().take(10).map(|a| (self.get_latest_name((a.0 & 0xFFFFFFFF) as u32, (a.0 >> 32) as u8).unwrap(), a.1)).collect();
+        let top_time = timer.elapsed().as_secs_f64();
+        TransferCountItemsResult {
+            src: false,
+            count: total_count,
+            table: save_file,
+            top,
+            search_time,
+            table_time,
+            top_time,
+            result_logs: result.len() as u64,
+            total_logs: self.total_log_count(),
+        }
     }
 
     pub fn get_transfer_overview_by_src_hex(&self, hex: &str, start_time: Option<u32>, end_time: Option<u32>) -> TransferOverviewResult {
@@ -457,6 +596,26 @@ impl Cosmogram {
         result
     }
 
+    pub fn find_latest_ship(&self, hex: u32, lz: u8) -> Option<PackedShipEntry> {
+        let hash = packed_ship_hex_to_hash(hex, lz);
+        let ship_names = &self.ship_names[&hash];
+        for log_index in (0..self.ships.len()).rev() {
+            let day = &self.ships[log_index];
+            if let Some(ship) = day.get(&hash) {
+                let i = ship_names.partition_point(|entry| entry.index <= log_index);
+                let name = &ship_names[i.saturating_sub(1)];
+                return Some(PackedShipEntry {
+                    items: ship.items.clone(),
+                    name: name.name.clone(),
+                    color: name.color.clone(),
+                    hex,
+                    hex_lz: lz,
+                });
+            }
+        }
+        None
+    }
+
     pub fn get_latest_name(&self, hex: u32, lz: u8) -> Option<String> {
         if hex == 0 && lz == 0{
             return Some("killed".to_string());
@@ -472,6 +631,12 @@ impl Cosmogram {
 
     pub fn get_latest_name_from_hash(&self, hex_hash: u64) -> Option<String> {
         self.get_latest_name((hex_hash & 0xFFFFFFFF) as u32, (hex_hash >> 32) as u8)
+    }
+
+    pub fn get_latest_ship_name_entry_from_hash(&self, hex_hash: u64) -> Option<&ShipNameEntry> {
+        let Some(names) = self.ship_names.get(&hex_hash) else { return None; };
+        let latest = names.last().unwrap();
+        Some(latest)
     }
 
     pub fn get_item_name(&self, item_id: u16) -> String {
@@ -514,7 +679,7 @@ impl Cosmogram {
         }
         let guess_capacity = (17 + longest_time + longest_item + longest_zone + 32) * rows.len() + 500;
         let mut result = String::with_capacity(guess_capacity);
-        result.push_str(&*format!("╭─S#─┬─{}─┬─{}─┬─{}─┬─{}\n", "Time".to_owned() + &*"─".repeat(longest_time - 4), "Time".to_owned() + &*"─".repeat(longest_zone - 4), "Item".to_owned() + &*"─".repeat(longest_item - 4), "Transfer".to_owned() + TRANSFER_END_STUFF));
+        result.push_str(&*format!("╭─S#─┬─{}─┬─{}─┬─{}─┬─{}\n", "Time".to_owned() + &*"─".repeat(longest_time - 4), "Zone".to_owned() + &*"─".repeat(longest_zone - 4), "Item".to_owned() + &*"─".repeat(longest_item - 4), "Transfer".to_owned() + TRANSFER_END_STUFF));
         for row in rows {
             let time_length = row.1.len();
             let time = row.1 + &*" ".repeat(longest_time - time_length);

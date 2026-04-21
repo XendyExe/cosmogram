@@ -55,6 +55,7 @@ impl TransferLog {
 pub struct ShipNameEntry {
     pub index: usize,
     pub name: String,
+    pub normalized_name: String,
     pub color: u32
 }
 

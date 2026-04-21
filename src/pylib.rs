@@ -3,7 +3,7 @@ use std::path::Path;
 use pyo3::{pyclass, pymethods};
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use crate::Cosmogram;
-use crate::resulttypes::{ShipRecord, TransferOverviewResult};
+use crate::resulttypes::{ShipRecord, TransferCountItemsResult, TransferOverviewResult};
 use pyo3::pymodule;
 use pyo3::Bound;
 use pyo3::prelude::PyModule;
@@ -17,6 +17,7 @@ define_stub_info_gatherer!(stub_info);
 fn cosmogram(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCosmogram>()?;
     m.add_class::<TransferOverviewResult>()?;
+    m.add_class::<TransferCountItemsResult>()?;
     Ok(())
 }
 
@@ -52,6 +53,14 @@ impl PyCosmogram {
         self.inner.get_transfer_overview_by_dst_hex(hex, start_time, end_time)
     }
 
+    pub fn get_transfer_item_count_by_src_hex(&self, hex: &str, item: u16, start_time: Option<u32>, end_time: Option<u32>) -> TransferCountItemsResult {
+        self.inner.get_transfer_item_count_by_src_hex(hex, item, start_time, end_time)
+    }
+
+    pub fn get_transfer_item_count_by_dst_hex(&self, hex: &str, item: u16, start_time: Option<u32>, end_time: Option<u32>) -> TransferCountItemsResult {
+        self.inner.get_transfer_item_count_by_dst_hex(hex, item, start_time, end_time)
+    }
+
     pub fn get_latest_ship_name_from_hash(&self, hash: u64) {
         let hex = (hash & 0xFFFFFFFF) as u32;
         let lz = (hash >> 32) as u8;
@@ -68,10 +77,10 @@ impl PyCosmogram {
         self.inner.ship_exists(hash)
     }
 
-    pub fn get_networth_leaderboard_no_rares(&self) -> &Vec<(u64, f64)> {
-        &self.inner.leaderboard_flux_no_rares
+    pub fn get_networth_leaderboard_no_rares(&self, search: Option<&str>, use_strict: bool) -> Vec<((u64, f64), u32)> {
+        self.inner.get_no_rares_leaderboard(search, use_strict)
     }
-    pub fn get_networth_leaderboard_with_rares(&self) -> &Vec<(u64, f64)> {
-        &self.inner.leaderboard_flux_rares
+    pub fn get_networth_leaderboard_with_rares(&self, search: Option<&str>, use_strict: bool) -> Vec<((u64, f64), u32)> {
+        self.inner.get_rares_leaderboard(search, use_strict)
     }
 }

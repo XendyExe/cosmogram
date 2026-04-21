@@ -160,7 +160,7 @@ pub fn fetch_transfer(year: u32, month: u32, day: u32, count: u32, simplificatio
 
     // This will overallocate the number of needed packed transfer logs, but it's better to
     // overallocate than underallocate. We allocate half the amount of reported transfer logs
-    let mut packed: Vec<PackedTransferLog> = Vec::with_capacity((count >> 2) as usize);
+    let mut packed: Vec<PackedTransferLog> = Vec::with_capacity((count >> 1) as usize);
 
     let mut original_count = 0;
     for result in stream_json_array::<TransferJsonEntry, _>(stream) {
@@ -247,6 +247,7 @@ pub fn fetch_transfer(year: u32, month: u32, day: u32, count: u32, simplificatio
             entry.dst = src;
             entry.set_src_lz(dst_lz);
             entry.set_dst_lz(src_lz);
+            entry.count = -entry.count;
         }
     }
 

@@ -3,6 +3,7 @@ use std::hash::{Hash, Hasher};
 use pyo3::pyclass;
 #[cfg(feature = "python")]
 use pyo3_stub_gen::derive::gen_stub_pyclass;
+use crate::types::TransferLog;
 
 #[cfg(not(feature = "python"))]
 pub struct TransferOverviewResult {
@@ -26,6 +27,43 @@ pub struct TransferOverviewResult {
     pub table: String,
     #[pyo3(get)]
     pub top: Vec<(String, f64)>,
+    #[pyo3(get)]
+    pub search_time: f64,
+    #[pyo3(get)]
+    pub table_time: f64,
+    #[pyo3(get)]
+    pub top_time: f64,
+    #[pyo3(get)]
+    pub result_logs: u64,
+    #[pyo3(get)]
+    pub total_logs: u64,
+}
+
+#[cfg(not(feature = "python"))]
+pub struct TransferCountItemsResult {
+    pub src: bool,
+    pub count: u32,
+    pub table: String,
+    pub top: Vec<(String, u32)>,
+    pub search_time: f64,
+    pub table_time: f64,
+    pub top_time: f64,
+    pub result_logs: u64,
+    pub total_logs: u64
+}
+
+#[cfg(feature = "python")]
+#[gen_stub_pyclass]
+#[pyclass]
+pub struct TransferCountItemsResult {
+    #[pyo3(get)]
+    pub src: bool,
+    #[pyo3(get)]
+    pub count: u32,
+    #[pyo3(get)]
+    pub table: String,
+    #[pyo3(get)]
+    pub top: Vec<(String, u32)>,
     #[pyo3(get)]
     pub search_time: f64,
     #[pyo3(get)]

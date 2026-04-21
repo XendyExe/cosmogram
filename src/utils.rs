@@ -1,3 +1,7 @@
+use unicode_normalization::UnicodeNormalization;
+use unicode_casefold::UnicodeCaseFold;
+use unicode_general_category::{get_general_category, GeneralCategory};
+
 pub fn count_hex_leading_zeros(s: &str) -> u8 {
     s.chars().take_while(|&c| c == '0').count() as u8
 }
@@ -28,4 +32,11 @@ pub fn is_hash_4_digit(hash: u64) -> bool {
     let lz = (hash >> 32) as u32;
     let hex_len =  ((32 - value.leading_zeros()) + 3) >> 2;
     lz + hex_len <= 4
+}
+
+
+pub fn normalize_name(input: &str) -> String {
+    input.nfkd().case_fold().filter(|c| { !matches!(get_general_category(*c),
+                GeneralCategory::NonspacingMark | GeneralCategory::EnclosingMark
+    ) }).collect::<String>()
 }
